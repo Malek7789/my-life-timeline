@@ -612,9 +612,11 @@ function goTo(where) {
 
 // ── Tooltip ────────────────────────────────────────────────────────────────
 let tipTimeout = null;
-const tipEl = document.getElementById('tip');
+let tipEl = null;
 
 function showTip(text, x, y) {
+  if(!tipEl) tipEl = document.getElementById('tip');
+  if(!tipEl) return;
   tipEl.textContent = text;
   // position near cursor but keep on screen
   const tw = Math.min(280, text.length * 7 + 22);
@@ -626,7 +628,8 @@ function showTip(text, x, y) {
   tipEl.classList.add('show');
 }
 function hideTip() {
-  tipEl.classList.remove('show');
+  if(!tipEl) tipEl = document.getElementById('tip');
+  if(tipEl) tipEl.classList.remove('show');
 }
 
 function getEventAtMouse(mx, my) {
@@ -677,9 +680,10 @@ window.addEventListener('mousemove', e => {
     const rect = cwrap.getBoundingClientRect();
     const mx = e.clientX - rect.left, my = e.clientY - rect.top;
     const hit = getEventAtMouse(mx, my);
-    if(hit && hit.title.length > 18) {
+    if(hit) {
       clearTimeout(tipTimeout);
-      tipTimeout = setTimeout(() => showTip(hit.title, e.clientX, e.clientY), 120);
+      const tipText = hit.title + (hit.notes ? '\n' + hit.notes.slice(0,60) + (hit.notes.length>60?'…':'') : '');
+      tipTimeout = setTimeout(() => showTip(tipText, e.clientX, e.clientY), 150);
     } else {
       clearTimeout(tipTimeout);
       hideTip();
@@ -696,31 +700,7 @@ window.addEventListener('mouseup', e => {
   if(dMoved<6) {
     const rect=cwrap.getBoundingClientRect();
     const mx=e.clientX-rect.left, my=e.clientY-rect.top;
-    const TY=canvas.height*.58, TW=90, TH=68;
-    let hit=null, best=9999;
-    const visForClick = events.filter(ev => filterK ? ev.cat===filterK : true);
-    visForClick.forEach((ev,ri) => {
-      const ex=msToX(ev.date);
-      const above=ri%2===0;
-      const dd=Math.sqrt((ex-mx)**2+(TY-my)**2);
-      let thumbHit=false;
-      if(ev.media && ev.media.length) {
-        const tx=ex-TW/2, ty=above?TY-5-TH:TY+5;
-        if(mx>=tx&&mx<=tx+TW&&my>=ty&&my<=ty+TH) thumbHit=true;
-      }
-      const lw=110, lh=22;
-      let labelHit=false;
-      if(ev.media && ev.media.length) {
-        const lblY=above?TY+20:TY-10;
-        if(mx>=ex-lw/2&&mx<=ex+lw/2&&my>=lblY-lh&&my<=lblY+8) labelHit=true;
-      } else {
-        const sl=30+(ri%4)*10;
-        const se=above?TY-sl:TY+sl;
-        const lblY=above?se-7:se+13;
-        if(mx>=ex-lw/2&&mx<=ex+lw/2&&my>=lblY-lh&&my<=lblY+8) labelHit=true;
-      }
-      if((dd<22||thumbHit||labelHit) && dd<best) { best=dd; hit=ev; }
-    });
+    const hit = getEventAtMouse(mx, my);
     if(hit) openPanel(hit);
     else closePanel();
   }
