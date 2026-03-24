@@ -536,19 +536,28 @@ window.addEventListener('mouseup', e => {
     const mx=e.clientX-rect.left, my=e.clientY-rect.top;
     const TY=canvas.height*.58, TW=90, TH=68;
     let hit=null, best=9999;
-    events.forEach((ev,ri) => {
-      if(filterK && ev.cat!==filterK) return;
+    const visForClick = events.filter(ev => filterK ? ev.cat===filterK : true);
+    visForClick.forEach((ev,ri) => {
       const ex=msToX(ev.date);
-      // check dot
+      const above=ri%2===0;
       const dd=Math.sqrt((ex-mx)**2+(TY-my)**2);
-      // check thumbnail
       let thumbHit=false;
       if(ev.media && ev.media.length) {
-        const above=ri%2===0;
         const tx=ex-TW/2, ty=above?TY-5-TH:TY+5;
         if(mx>=tx&&mx<=tx+TW&&my>=ty&&my<=ty+TH) thumbHit=true;
       }
-      if((dd<18||thumbHit) && dd<best) { best=dd; hit=ev; }
+      const lw=110, lh=22;
+      let labelHit=false;
+      if(ev.media && ev.media.length) {
+        const lblY=above?TY+20:TY-10;
+        if(mx>=ex-lw/2&&mx<=ex+lw/2&&my>=lblY-lh&&my<=lblY+8) labelHit=true;
+      } else {
+        const sl=30+(ri%4)*10;
+        const se=above?TY-sl:TY+sl;
+        const lblY=above?se-7:se+13;
+        if(mx>=ex-lw/2&&mx<=ex+lw/2&&my>=lblY-lh&&my<=lblY+8) labelHit=true;
+      }
+      if((dd<22||thumbHit||labelHit) && dd<best) { best=dd; hit=ev; }
     });
     if(hit) openPanel(hit);
     else closePanel();
