@@ -51,6 +51,27 @@ button:hover{background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1
 .zbtn{font-size:15px;padding:3px 9px;line-height:1}
 
 
+
+/* category manager modal */
+#catwrap{display:none;position:absolute;inset:0;background:rgba(0,0,0,0.8);z-index:40;align-items:center;justify-content:center}
+#catwrap.open{display:flex}
+#catmodal{background:#111;border:1px solid rgba(200,160,80,0.15);border-radius:10px;padding:22px;width:420px;max-height:88vh;overflow-y:auto}
+#catmodal h2{font-family:'Playfair Display',serif;font-size:17px;font-weight:400;color:#d4a85a;margin-bottom:16px}
+.cat-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.04)}
+.cat-row:last-child{border-bottom:none}
+.cat-color-swatch{width:24px;height:24px;border-radius:4px;flex-shrink:0;cursor:pointer;border:1px solid rgba(255,255,255,0.1);position:relative;overflow:hidden}
+.cat-color-swatch input[type=color]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;padding:0;border:none}
+.cat-name-input{flex:1;background:#161616;border:1px solid rgba(255,255,255,0.08);border-radius:4px;color:#e8e0d5;font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 8px;outline:none;transition:border-color .12s}
+.cat-name-input:focus{border-color:rgba(200,160,80,0.4)}
+.cat-del{background:transparent;border:none;color:#555;font-size:14px;padding:0 3px;cursor:pointer;line-height:1}
+.cat-del:hover{color:#a85050;background:transparent}
+.cat-del:disabled{opacity:0.2;cursor:not-allowed}
+#cat-add-row{display:flex;gap:8px;margin-top:12px;align-items:center}
+#cat-new-name{flex:1;background:#161616;border:1px solid rgba(255,255,255,0.08);border-radius:4px;color:#e8e0d5;font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 8px;outline:none;transition:border-color .12s}
+#cat-new-name:focus{border-color:rgba(200,160,80,0.4)}
+#cat-new-name::placeholder{color:#3a3530}
+#cat-new-color{width:32px;height:32px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);padding:0;cursor:pointer;background:#c8902a}
+
 /* search */
 #sbar{
   display:flex;align-items:center;gap:8px;
@@ -156,6 +177,7 @@ canvas{position:absolute;top:0;left:0;display:block}
       <button onclick="goTo('birth')">↩ Birth</button>
       <button onclick="goTo('today')">Today ↦</button>
       <button onclick="openExport()">⇅ Backup</button>
+      <button onclick="openCatManager()">⊞ Categories</button>
       <button class="bg" onclick="openAdd(null)">+ Add memory</button>
     </div>
   </div>
@@ -234,6 +256,22 @@ canvas{position:absolute;top:0;left:0;display:block}
       </div>
     </div>
 
+
+    <!-- category manager modal -->
+    <div id="catwrap">
+      <div id="catmodal">
+        <h2>Manage Categories</h2>
+        <div id="cat-list"></div>
+        <div id="cat-add-row">
+          <input id="cat-new-name" placeholder="New category name…" maxlength="24">
+          <input type="color" id="cat-new-color" value="#c8902a" title="Pick color">
+          <button class="bg" onclick="addCategory()">+ Add</button>
+        </div>
+        <div class="mbtns" style="margin-top:16px">
+          <button onclick="closeCatManager()">Done</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="legend">
@@ -254,7 +292,7 @@ canvas{position:absolute;top:0;left:0;display:block}
 // ── Constants ──────────────────────────────────────────────────────────────
 const BIRTH = new Date(1996,0,15).getTime();
 const STORE_KEY = 'mylife_timeline_v1';
-const CATS = {
+let CATS = {
   life:  {label:'Life milestone', color:'#c8902a'},
   family:{label:'Family',         color:'#c05878'},
   travel:{label:'Travel',         color:'#3a9e80'},
@@ -770,6 +808,7 @@ function doImport(input) {
 // ── Backdrop close ─────────────────────────────────────────────────────────
 document.getElementById('mwrap').addEventListener('click',e=>{ if(e.target===document.getElementById('mwrap')) closeModal(); });
 document.getElementById('ewrap').addEventListener('click',e=>{ if(e.target===document.getElementById('ewrap')) closeExport(); });
+document.getElementById('catwrap').addEventListener('click',e=>{ if(e.target===document.getElementById('catwrap')) closeCatManager(); });
 
 // ── Toast ──────────────────────────────────────────────────────────────────
 let toastT;
@@ -778,6 +817,132 @@ function toast(msg) {
   clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2400);
 }
 
+
+
+// ── Category Manager ───────────────────────────────────────────────────────
+const DEFAULT_CAT_KEYS = ['life','family','travel','work','health','memory'];
+const CAT_STORE_KEY = 'mylife_cats_v1';
+
+function loadCats() {
+  try {
+    const raw = localStorage.getItem(CAT_STORE_KEY);
+    if(raw) {
+      const saved = JSON.parse(raw);
+      // merge saved into CATS, preserving defaults
+      Object.entries(saved).forEach(([k,v]) => { CATS[k] = v; });
+    }
+  } catch(e) {}
+}
+function persistCats() {
+  localStorage.setItem(CAT_STORE_KEY, JSON.stringify(CATS));
+}
+
+function openCatManager() {
+  renderCatList();
+  document.getElementById('catwrap').classList.add('open');
+}
+function closeCatManager() {
+  document.getElementById('catwrap').classList.remove('open');
+  // rebuild legend
+  buildLegend();
+  draw();
+}
+
+function renderCatList() {
+  const list = document.getElementById('cat-list');
+  list.innerHTML = '';
+  Object.entries(CATS).forEach(([key, {label, color}]) => {
+    const row = document.createElement('div');
+    row.className = 'cat-row';
+
+    // color swatch with color picker inside
+    const swatch = document.createElement('div');
+    swatch.className = 'cat-color-swatch';
+    swatch.style.background = color;
+    const picker = document.createElement('input');
+    picker.type = 'color';
+    picker.value = color;
+    picker.oninput = e => {
+      CATS[key].color = e.target.value;
+      swatch.style.background = e.target.value;
+      persistCats();
+      draw();
+    };
+    swatch.appendChild(picker);
+
+    // name input
+    const nameInput = document.createElement('input');
+    nameInput.className = 'cat-name-input';
+    nameInput.value = label;
+    nameInput.maxLength = 24;
+    nameInput.oninput = e => {
+      CATS[key].label = e.target.value;
+      persistCats();
+    };
+
+    // delete button
+    const del = document.createElement('button');
+    del.className = 'cat-del';
+    del.textContent = '✕';
+    del.title = DEFAULT_CAT_KEYS.includes(key) ? 'Default categories cannot be deleted' : 'Delete category';
+    del.disabled = DEFAULT_CAT_KEYS.includes(key);
+    del.onclick = () => {
+      if(DEFAULT_CAT_KEYS.includes(key)) return;
+      if(!confirm('Delete category "' + label + '"? Events in this category will become "Life milestone".')) return;
+      // reassign events
+      events.forEach(ev => { if(ev.cat===key) ev.cat='life'; });
+      persist();
+      delete CATS[key];
+      persistCats();
+      renderCatList();
+      draw();
+    };
+
+    row.appendChild(swatch);
+    row.appendChild(nameInput);
+    row.appendChild(del);
+    list.appendChild(row);
+  });
+}
+
+function addCategory() {
+  const nameEl = document.getElementById('cat-new-name');
+  const colorEl = document.getElementById('cat-new-color');
+  const name = nameEl.value.trim();
+  if(!name) { nameEl.focus(); return; }
+  // generate a key from the name
+  const key = 'custom_' + name.toLowerCase().replace(/[^a-z0-9]/g,'_') + '_' + Date.now();
+  CATS[key] = { label: name, color: colorEl.value };
+  persistCats();
+  nameEl.value = '';
+  colorEl.value = '#c8902a';
+  renderCatList();
+  buildLegend();
+  draw();
+}
+
+function buildLegend() {
+  const legend = document.getElementById('legend');
+  // remove all .li elements
+  legend.querySelectorAll('.li').forEach(el => el.remove());
+  const count = document.getElementById('lcount');
+  // rebuild
+  Object.entries(CATS).forEach(([key, {label, color}]) => {
+    const div = document.createElement('div');
+    div.className = 'li';
+    div.dataset.cat = key;
+    div.onclick = () => setFilter(key);
+    div.innerHTML = '<div class="ld" style="background:'+color+'"></div>' + label.toUpperCase().slice(0,8);
+    legend.insertBefore(div, count);
+  });
+  // ALL button
+  const all = document.createElement('div');
+  all.className = 'li';
+  all.style.color = '#3a3530';
+  all.onclick = () => setFilter(null);
+  all.textContent = 'ALL';
+  legend.insertBefore(all, count);
+}
 
 // ── Search ─────────────────────────────────────────────────────────────────
 function onSearch(val) {
@@ -810,9 +975,11 @@ function updateSearchCount() {
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────
+loadCats();
 loadEvents();
 resize();
 updateZbar();
+buildLegend();
 </script>
 </body>
 </html>
