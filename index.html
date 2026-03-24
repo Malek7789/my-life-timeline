@@ -471,6 +471,8 @@ function draw() {
     const hasMedia = ev.media && ev.media.length>0;
     const matched = !searching || matchesSearch(ev);
     ctx.globalAlpha = matched ? 1 : 0.15;
+    // stagger stem length based on position in visible list so labels spread vertically
+    const tier = Math.floor(ri / 2) % 4;
 
     if(hasMedia) {
       const tx = Math.round(x - TW/2);
@@ -535,23 +537,24 @@ function draw() {
       ctx.stroke();
 
       // title on opposite side of track from thumb
-      ctx.font = sel ? '500 10px "Lato",sans-serif' : '300 10px "Lato",sans-serif';
-      ctx.fillStyle = sel ? col : col+'cc';
+      ctx.font = sel ? '500 11px "Lato",sans-serif' : '400 11px "Lato",sans-serif';
+      ctx.fillStyle = col;
       ctx.textAlign = 'center';
       const lbl = ev.title.length>20 ? ev.title.slice(0,18)+'…' : ev.title;
       ctx.fillText(lbl, x, above ? TY+20 : TY-9);
 
     } else {
-      // no media — simple labeled stem
-      const sl = 30 + (ri%4)*10;
+      // no media — stem length staggers by tier so labels spread vertically
+      const sl = 32 + tier * 22;
       const se = above ? TY-sl : TY+sl;
-      ctx.strokeStyle = col+'33'; ctx.lineWidth=1;
+      ctx.strokeStyle = col+'55'; ctx.lineWidth=1;
       ctx.beginPath(); ctx.moveTo(x,TY); ctx.lineTo(x,se); ctx.stroke();
-      ctx.font = sel ? '500 10px "Lato",sans-serif' : '300 10px "Lato",sans-serif';
-      ctx.fillStyle = sel ? col : col+'cc';
+      ctx.font = sel ? '500 11px "Lato",sans-serif' : '400 11px "Lato",sans-serif';
+      ctx.fillStyle = col;
+      ctx.globalAlpha = matched ? (sel ? 1 : 0.92) : 0.15;
       ctx.textAlign = 'center';
       const lbl = ev.title.length>22 ? ev.title.slice(0,20)+'…' : ev.title;
-      ctx.fillText(lbl, x, above ? se-7 : se+13);
+      ctx.fillText(lbl, x, above ? se-7 : se+14);
     }
 
     // event dot
