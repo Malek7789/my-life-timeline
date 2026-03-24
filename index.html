@@ -50,6 +50,26 @@ button:hover{background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1
 .bd:hover{background:rgba(168,80,80,0.08)}
 .zbtn{font-size:15px;padding:3px 9px;line-height:1}
 
+
+/* search */
+#sbar{
+  display:flex;align-items:center;gap:8px;
+  padding:6px 18px;background:#0a0a0a;
+  border-bottom:1px solid rgba(255,255,255,0.04);
+  flex-shrink:0;
+}
+#search-input{
+  flex:1;background:#141414;border:1px solid rgba(255,255,255,0.08);
+  border-radius:4px;color:#e8e0d5;font-family:'JetBrains Mono',monospace;
+  font-size:11px;padding:5px 10px;outline:none;transition:border-color .12s;
+  letter-spacing:.03em;
+}
+#search-input:focus{border-color:rgba(200,160,80,0.4)}
+#search-input::placeholder{color:#3a3530}
+#search-count{font-family:'JetBrains Mono',monospace;font-size:9px;color:#6a6560;white-space:nowrap;min-width:60px;text-align:right}
+#search-clear{background:transparent;border:none;color:#3a3530;font-size:14px;padding:0 2px;cursor:pointer;line-height:1;display:none}
+#search-clear:hover{color:#a09080;background:transparent}
+
 /* canvas */
 #cwrap{flex:1;position:relative;overflow:hidden;cursor:crosshair;user-select:none;min-height:200px}
 canvas{position:absolute;top:0;left:0;display:block}
@@ -147,6 +167,13 @@ canvas{position:absolute;top:0;left:0;display:block}
     <span id="zdates"></span>
   </div>
 
+
+  <div id="sbar">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#3a3530;letter-spacing:.1em">SEARCH</span>
+    <input id="search-input" placeholder="search memories…" oninput="onSearch(this.value)">
+    <button id="search-clear" onclick="clearSearch()">×</button>
+    <span id="search-count"></span>
+  </div>
   <div id="cwrap">
     <canvas id="tl"></canvas>
 
@@ -245,6 +272,7 @@ let editId = null;
 let filterK = null;
 let selCat  = 'life';
 let pendingMedia = [];
+let searchQ = '';
 
 // ── Storage ────────────────────────────────────────────────────────────────
 function loadEvents() {
@@ -392,6 +420,7 @@ function draw() {
     const x = msToX(ev.date);
     return x > -TW-20 && x < W+TW+20;
   });
+  const searching = searchQ.length > 0;
 
   // draw selected last so it sits on top
   vis.sort((a,b) => (a.id===selId?1:0) - (b.id===selId?1:0));
@@ -402,6 +431,8 @@ function draw() {
     const sel = ev.id===selId;
     const above = ri%2===0;
     const hasMedia = ev.media && ev.media.length>0;
+    const matched = !searching || matchesSearch(ev);
+    ctx.globalAlpha = matched ? 1 : 0.15;
 
     if(hasMedia) {
       const tx = Math.round(x - TW/2);
@@ -494,6 +525,7 @@ function draw() {
       ctx.beginPath(); ctx.arc(x,TY,r+5,0,Math.PI*2);
       ctx.strokeStyle=col+'28'; ctx.lineWidth=1; ctx.stroke();
     }
+    ctx.globalAlpha = 1;
   });
 }
 
@@ -744,6 +776,37 @@ let toastT;
 function toast(msg) {
   const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
   clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2400);
+}
+
+
+// ── Search ─────────────────────────────────────────────────────────────────
+function onSearch(val) {
+  searchQ = val.trim().toLowerCase();
+  document.getElementById('search-clear').style.display = searchQ ? 'block' : 'none';
+  updateSearchCount();
+  draw();
+}
+function clearSearch() {
+  searchQ = '';
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-clear').style.display = 'none';
+  document.getElementById('search-count').textContent = '';
+  draw();
+}
+function matchesSearch(ev) {
+  if(!searchQ) return true;
+  return (
+    ev.title.toLowerCase().includes(searchQ) ||
+    (ev.notes||'').toLowerCase().includes(searchQ) ||
+    (CATS[ev.cat]||CATS.life).label.toLowerCase().includes(searchQ)
+  );
+}
+function updateSearchCount() {
+  const el = document.getElementById('search-count');
+  if(!searchQ){ el.textContent=''; return; }
+  const n = events.filter(matchesSearch).length;
+  el.textContent = n + ' result' + (n!==1?'s':'');
+  el.style.color = n===0 ? '#a85050' : '#6a6560';
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────
