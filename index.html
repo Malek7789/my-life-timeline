@@ -363,6 +363,7 @@ let pendingMedia = [];
 let searchQ = '';
 let rangeFrom = null;
 let rangeTo = null;
+let posMap = {}; // stable position map for events, built during draw
 
 // ── Storage ────────────────────────────────────────────────────────────────
 function loadEvents() {
@@ -513,19 +514,46 @@ function draw() {
   });
   const searching = searchQ.length > 0;
 
-  // draw selected last so it sits on top
-  vis.sort((a,b) => (a.id===selId?1:0) - (b.id===selId?1:0));
+  // Assign stable above/tier/stem positions BEFORE sort, keyed by id
+  // Use pixel-aware grouping: events within 30px of each other get different tiers
+  posMap = {};
+  const usedSlots = []; // [{x, above, tier}]
+  vis.forEach((ev) => {
+    const x = Math.round(msToX(ev.date));
+    // find slot that doesn't conflict
+    let assigned = false;
+    for(let above = 0; above <= 1 && !assigned; above++) {
+      for(let tier = 0; tier < 6 && !assigned; tier++) {
+        const conflict = usedSlots.some(s => {
+          if(s.above !== (above===0)) return false;
+          if(Math.abs(s.x - x) > 130) return false; // far enough apart
+          return s.tier === tier;
+        });
+        if(!conflict) {
+          posMap[ev.id] = {above: above===0, tier};
+          usedSlots.push({x, above: above===0, tier});
+          assigned = true;
+        }
+      }
+    }
+    if(!assigned) {
+      // fallback
+      const ri = vis.indexOf(ev);
+      posMap[ev.id] = {above: ri%2===0, tier: Math.floor(ri/2)%4};
+    }
+  });
 
-  vis.forEach((ev, ri) => {
+  // draw selected last so it sits on top
+  const visSorted = [...vis].sort((a,b) => (a.id===selId?1:0) - (b.id===selId?1:0));
+
+  visSorted.forEach((ev) => {
     const x   = Math.round(msToX(ev.date));
     const col = (CATS[ev.cat]||CATS.life).color;
     const sel = ev.id===selId;
-    const above = ri%2===0;
+    const {above, tier} = posMap[ev.id] || {above:true, tier:0};
     const hasMedia = ev.media && ev.media.length>0;
     const matched = !searching || matchesSearch(ev);
     ctx.globalAlpha = matched ? 1 : 0.15;
-    // stagger stem length based on position in visible list so labels spread vertically
-    const tier = Math.floor(ri / 2) % 4;
 
     if(hasMedia) {
       const tx = Math.round(x - TW/2);
@@ -669,24 +697,24 @@ function getEventAtMouse(mx, my) {
   const TY = canvas.height * 0.58, TW = 90, TH = 68;
   const visForHover = events.filter(ev => (filterK ? ev.cat === filterK : true) && inRange(ev));
   let hit = null, best = 9999;
-  visForHover.forEach((ev, ri) => {
+  visForHover.forEach((ev) => {
     const ex = msToX(ev.date);
-    const above = ri % 2 === 0;
-    const tier = Math.floor(ri / 2) % 4;
+    const pos = posMap[ev.id] || {above:true, tier:0};
+    const above = pos.above;
+    const tier = pos.tier;
     const dd = Math.sqrt((ex - mx) ** 2 + (TY - my) ** 2);
-    // dot hit
     let close = dd < 22;
     // thumbnail hit
     if(ev.media && ev.media.length) {
       const tx = ex - TW/2, ty = above ? TY - 5 - TH : TY + 5;
       if(mx >= tx && mx <= tx + TW && my >= ty && my <= ty + TH) close = true;
     }
-    // label hit
+    // label hit — use same stem math as draw
     const sl = 32 + tier * 22;
     const se = above ? TY - sl : TY + sl;
     const lblY = ev.media && ev.media.length ? (above ? TY + 20 : TY - 9) : (above ? se - 7 : se + 14);
-    const lw = 120;
-    if(mx >= ex - lw/2 && mx <= ex + lw/2 && my >= lblY - 18 && my <= lblY + 8) close = true;
+    const lw = 130;
+    if(mx >= ex - lw/2 && mx <= ex + lw/2 && my >= lblY - 20 && my <= lblY + 8) close = true;
     if(close && dd < best) { best = dd; hit = ev; }
   });
   return hit;
