@@ -630,7 +630,6 @@ function zoom(f, c) {
   const ns=Math.max(3.6e6, Math.min(1e3*60*60*24*365*110, s*f));
   const r=(c-vStart)/s;
   vStart=c-r*ns; vEnd=vStart+ns;
-  clampView();
   draw(); updateZbar();
 }
 
@@ -706,7 +705,6 @@ window.addEventListener('mousemove', e => {
     const p=(dVE-dVS)/canvas.width;
     vStart=dVS-(e.clientX-dX0)*p;
     vEnd  =dVE-(e.clientX-dX0)*p;
-    clampView();
     draw(); updateZbar();
     hideTip(); return;
   }
