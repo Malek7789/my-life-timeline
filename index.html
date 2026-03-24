@@ -72,6 +72,28 @@ button:hover{background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1
 #cat-new-name::placeholder{color:#3a3530}
 #cat-new-color{width:32px;height:32px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);padding:0;cursor:pointer;background:#c8902a}
 
+
+/* hover tooltip */
+#tip{
+  position:fixed;
+  background:#1a1a1a;
+  border:1px solid rgba(200,160,80,0.25);
+  border-radius:5px;
+  padding:6px 11px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:11px;
+  color:#e8d8b8;
+  pointer-events:none;
+  z-index:80;
+  white-space:nowrap;
+  opacity:0;
+  transition:opacity .12s;
+  max-width:280px;
+  white-space:normal;
+  line-height:1.5;
+}
+#tip.show{opacity:1}
+
 /* search */
 #sbar{
   display:flex;align-items:center;gap:8px;
@@ -587,19 +609,86 @@ function goTo(where) {
   draw(); updateZbar();
 }
 
+
+// ── Tooltip ────────────────────────────────────────────────────────────────
+let tipTimeout = null;
+const tipEl = document.getElementById('tip');
+
+function showTip(text, x, y) {
+  tipEl.textContent = text;
+  // position near cursor but keep on screen
+  const tw = Math.min(280, text.length * 7 + 22);
+  let lx = x + 14, ly = y - 10;
+  if(lx + tw > window.innerWidth - 10) lx = x - tw - 10;
+  if(ly < 10) ly = y + 20;
+  tipEl.style.left = lx + 'px';
+  tipEl.style.top  = ly + 'px';
+  tipEl.classList.add('show');
+}
+function hideTip() {
+  tipEl.classList.remove('show');
+}
+
+function getEventAtMouse(mx, my) {
+  const TY = canvas.height * 0.58, TW = 90, TH = 68;
+  const visForHover = events.filter(ev => filterK ? ev.cat === filterK : true);
+  let hit = null, best = 9999;
+  visForHover.forEach((ev, ri) => {
+    const ex = msToX(ev.date);
+    const above = ri % 2 === 0;
+    const tier = Math.floor(ri / 2) % 4;
+    const dd = Math.sqrt((ex - mx) ** 2 + (TY - my) ** 2);
+    // dot hit
+    let close = dd < 22;
+    // thumbnail hit
+    if(ev.media && ev.media.length) {
+      const tx = ex - TW/2, ty = above ? TY - 5 - TH : TY + 5;
+      if(mx >= tx && mx <= tx + TW && my >= ty && my <= ty + TH) close = true;
+    }
+    // label hit
+    const sl = 32 + tier * 22;
+    const se = above ? TY - sl : TY + sl;
+    const lblY = ev.media && ev.media.length ? (above ? TY + 20 : TY - 9) : (above ? se - 7 : se + 14);
+    const lw = 120;
+    if(mx >= ex - lw/2 && mx <= ex + lw/2 && my >= lblY - 18 && my <= lblY + 8) close = true;
+    if(close && dd < best) { best = dd; hit = ev; }
+  });
+  return hit;
+}
+
 let dragging=false, dX0=0, dVS=0, dVE=0, dMoved=0;
 cwrap.addEventListener('mousedown', e => {
   if(e.target!==canvas) return;
   dragging=true; dMoved=0; dX0=e.clientX; dVS=vStart; dVE=vEnd;
   cwrap.style.cursor='grabbing';
+  hideTip();
 });
 window.addEventListener('mousemove', e => {
-  if(!dragging) return;
-  dMoved = Math.abs(e.clientX-dX0);
-  const p=(dVE-dVS)/canvas.width;
-  vStart=dVS-(e.clientX-dX0)*p;
-  vEnd  =dVE-(e.clientX-dX0)*p;
-  draw(); updateZbar();
+  if(dragging) {
+    dMoved = Math.abs(e.clientX-dX0);
+    const p=(dVE-dVS)/canvas.width;
+    vStart=dVS-(e.clientX-dX0)*p;
+    vEnd  =dVE-(e.clientX-dX0)*p;
+    draw(); updateZbar();
+    hideTip(); return;
+  }
+  // tooltip hover
+  if(e.target === canvas) {
+    const rect = cwrap.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const hit = getEventAtMouse(mx, my);
+    if(hit && hit.title.length > 18) {
+      clearTimeout(tipTimeout);
+      tipTimeout = setTimeout(() => showTip(hit.title, e.clientX, e.clientY), 120);
+    } else {
+      clearTimeout(tipTimeout);
+      hideTip();
+    }
+    // change cursor to pointer when hovering an event
+    cwrap.style.cursor = hit ? 'pointer' : 'crosshair';
+  } else {
+    hideTip();
+  }
 });
 window.addEventListener('mouseup', e => {
   if(!dragging) return;
@@ -678,6 +767,7 @@ function openPanel(ev) {
       const v=document.createElement('video'); v.src=m.dataUrl; v.controls=true; pm.appendChild(v);
     }
   });
+  hideTip();
   document.getElementById('panel').classList.add('open');
   draw();
 }
@@ -984,5 +1074,6 @@ resize();
 updateZbar();
 buildLegend();
 </script>
+<div id="tip"></div>
 </body>
 </html>
