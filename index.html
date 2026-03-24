@@ -462,7 +462,7 @@ function draw() {
   if(!W||!H) return;
   ctx.clearRect(0,0,W,H);
 
-  const TY  = Math.round(H*0.58);
+  const TY  = Math.round(H*0.48);
   const TW  = 90;
   const TH  = 68;
   const GAP = 5; // px between thumbnail edge and track
@@ -521,25 +521,28 @@ function draw() {
   vis.forEach((ev) => {
     const x = Math.round(msToX(ev.date));
     // find slot that doesn't conflict
+    // prefer alternating above/below first, then increase tier
     let assigned = false;
-    for(let above = 0; above <= 1 && !assigned; above++) {
-      for(let tier = 0; tier < 6 && !assigned; tier++) {
+    const preferAbove = usedSlots.filter(s => Math.abs(s.x - x) < 110).length % 2 === 0;
+    const aboveOrder = preferAbove ? [true, false] : [false, true];
+    for(let ai = 0; ai < 2 && !assigned; ai++) {
+      const above = aboveOrder[ai];
+      for(let tier = 0; tier < 10 && !assigned; tier++) {
         const conflict = usedSlots.some(s => {
-          if(s.above !== (above===0)) return false;
-          if(Math.abs(s.x - x) > 130) return false; // far enough apart
+          if(s.above !== above) return false;
+          if(Math.abs(s.x - x) > 110) return false;
           return s.tier === tier;
         });
         if(!conflict) {
-          posMap[ev.id] = {above: above===0, tier};
-          usedSlots.push({x, above: above===0, tier});
+          posMap[ev.id] = {above, tier};
+          usedSlots.push({x, above, tier});
           assigned = true;
         }
       }
     }
     if(!assigned) {
-      // fallback
       const ri = vis.indexOf(ev);
-      posMap[ev.id] = {above: ri%2===0, tier: Math.floor(ri/2)%4};
+      posMap[ev.id] = {above: ri%2===0, tier: ri%10};
     }
   });
 
@@ -626,7 +629,7 @@ function draw() {
 
     } else {
       // no media — stem length staggers by tier so labels spread vertically
-      const sl = 32 + tier * 22;
+      const sl = 28 + tier * 26;
       const se = above ? TY-sl : TY+sl;
       ctx.strokeStyle = col+'55'; ctx.lineWidth=1;
       ctx.beginPath(); ctx.moveTo(x,TY); ctx.lineTo(x,se); ctx.stroke();
@@ -694,7 +697,7 @@ function hideTip() {
 }
 
 function getEventAtMouse(mx, my) {
-  const TY = canvas.height * 0.58, TW = 90, TH = 68;
+  const TY = canvas.height * 0.48, TW = 90, TH = 68;
   const visForHover = events.filter(ev => (filterK ? ev.cat === filterK : true) && inRange(ev));
   let hit = null, best = 9999;
   visForHover.forEach((ev) => {
@@ -710,7 +713,7 @@ function getEventAtMouse(mx, my) {
       if(mx >= tx && mx <= tx + TW && my >= ty && my <= ty + TH) close = true;
     }
     // label hit — use same stem math as draw
-    const sl = 32 + tier * 22;
+    const sl = 28 + tier * 26;
     const se = above ? TY - sl : TY + sl;
     const lblY = ev.media && ev.media.length ? (above ? TY + 20 : TY - 9) : (above ? se - 7 : se + 14);
     const lw = 130;
