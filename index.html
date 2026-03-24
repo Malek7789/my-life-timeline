@@ -630,6 +630,7 @@ function zoom(f, c) {
   const ns=Math.max(3.6e6, Math.min(1e3*60*60*24*365*110, s*f));
   const r=(c-vStart)/s;
   vStart=c-r*ns; vEnd=vStart+ns;
+  clampView();
   draw(); updateZbar();
 }
 
@@ -705,6 +706,7 @@ window.addEventListener('mousemove', e => {
     const p=(dVE-dVS)/canvas.width;
     vStart=dVS-(e.clientX-dX0)*p;
     vEnd  =dVE-(e.clientX-dX0)*p;
+    clampView();
     draw(); updateZbar();
     hideTip(); return;
   }
@@ -1057,6 +1059,12 @@ function onRangeChange() {
   const toVal   = document.getElementById('yr-to').value;
   rangeFrom = fromVal ? new Date(parseInt(fromVal), 0, 1).getTime() : null;
   rangeTo   = toVal   ? new Date(parseInt(toVal),   11, 31, 23, 59, 59).getTime() : null;
+  // snap view to range
+  const rFrom = rangeFrom || BIRTH;
+  const rTo   = rangeTo   || (Date.now() + 1e3*60*60*24*365*4);
+  const pad   = (rTo - rFrom) * 0.05;
+  vStart = rFrom - pad;
+  vEnd   = rTo   + pad;
   updateRangeLabel();
   draw();
   updateZbar();
@@ -1065,6 +1073,8 @@ function clearRange() {
   rangeFrom = null; rangeTo = null;
   document.getElementById('yr-from').value = '';
   document.getElementById('yr-to').value = '';
+  vStart = BIRTH;
+  vEnd   = Date.now() + 1e3*60*60*24*365*4;
   updateRangeLabel();
   draw();
   updateZbar();
