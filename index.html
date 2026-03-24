@@ -94,6 +94,25 @@ button:hover{background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1
 }
 #tip.show{opacity:1}
 
+
+/* date range filter */
+#rangebar{
+  display:flex;align-items:center;gap:8px;
+  padding:6px 18px;background:#0a0a0a;
+  border-bottom:1px solid rgba(255,255,255,0.04);
+  flex-shrink:0;
+}
+#rangebar label{font-family:'JetBrains Mono',monospace;font-size:9px;color:#3a3530;letter-spacing:.1em;white-space:nowrap}
+.yr-input{
+  width:68px;background:#141414;border:1px solid rgba(255,255,255,0.08);
+  border-radius:4px;color:#e8d8b8;font-family:'JetBrains Mono',monospace;
+  font-size:11px;padding:4px 8px;outline:none;transition:border-color .12s;
+}
+.yr-input:focus{border-color:rgba(200,160,80,0.4)}
+#range-clear{font-size:10px;padding:4px 8px;color:#3a3530;border-color:rgba(255,255,255,0.06)}
+#range-clear:hover{color:#a09080}
+#range-active{font-family:'JetBrains Mono',monospace;font-size:9px;color:#b07820;margin-left:4px}
+
 /* search */
 #sbar{
   display:flex;align-items:center;gap:8px;
@@ -218,6 +237,15 @@ canvas{position:absolute;top:0;left:0;display:block}
     <button id="search-clear" onclick="clearSearch()">×</button>
     <span id="search-count"></span>
   </div>
+
+  <div id="rangebar">
+    <label>SHOW</label>
+    <input class="yr-input" id="yr-from" type="number" placeholder="from" min="1900" max="2100">
+    <label>→</label>
+    <input class="yr-input" id="yr-to" type="number" placeholder="to" min="1900" max="2100">
+    <button id="range-clear" onclick="clearRange()">✕ clear</button>
+    <span id="range-active"></span>
+  </div>
   <div id="cwrap">
     <canvas id="tl"></canvas>
 
@@ -333,6 +361,8 @@ let filterK = null;
 let selCat  = 'life';
 let pendingMedia = [];
 let searchQ = '';
+let rangeFrom = null;
+let rangeTo = null;
 
 // ── Storage ────────────────────────────────────────────────────────────────
 function loadEvents() {
@@ -477,6 +507,7 @@ function draw() {
   // get visible events
   const vis = events.filter(ev => {
     if(filterK && ev.cat!==filterK) return false;
+    if(!inRange(ev)) return false;
     const x = msToX(ev.date);
     return x > -TW-20 && x < W+TW+20;
   });
@@ -617,7 +648,9 @@ let tipEl = null;
 function showTip(text, x, y) {
   if(!tipEl) tipEl = document.getElementById('tip');
   if(!tipEl) return;
-  tipEl.textContent = text;
+  const parts = text.split('\n');
+  tipEl.innerHTML = '<div style="font-size:12px;color:#e8d8b8;font-weight:500">' + parts[0] + '</div>' +
+    (parts[1] ? '<div style="font-size:10px;color:#7a7060;margin-top:3px;letter-spacing:.03em">' + parts[1] + '</div>' : '');
   // position near cursor but keep on screen
   const tw = Math.min(280, text.length * 7 + 22);
   let lx = x + 14, ly = y - 10;
@@ -634,7 +667,7 @@ function hideTip() {
 
 function getEventAtMouse(mx, my) {
   const TY = canvas.height * 0.58, TW = 90, TH = 68;
-  const visForHover = events.filter(ev => filterK ? ev.cat === filterK : true);
+  const visForHover = events.filter(ev => (filterK ? ev.cat === filterK : true) && inRange(ev));
   let hit = null, best = 9999;
   visForHover.forEach((ev, ri) => {
     const ex = msToX(ev.date);
@@ -682,7 +715,7 @@ window.addEventListener('mousemove', e => {
     const hit = getEventAtMouse(mx, my);
     if(hit) {
       clearTimeout(tipTimeout);
-      const tipText = hit.title + (hit.notes ? '\n' + hit.notes.slice(0,60) + (hit.notes.length>60?'…':'') : '');
+      const tipText = hit.title + '\n' + fmtFull(hit.date);
       tipTimeout = setTimeout(() => showTip(tipText, e.clientX, e.clientY), 150);
     } else {
       clearTimeout(tipTimeout);
@@ -1017,6 +1050,41 @@ function buildLegend() {
   legend.insertBefore(all, count);
 }
 
+
+// ── Date Range Filter ──────────────────────────────────────────────────────
+function onRangeChange() {
+  const fromVal = document.getElementById('yr-from').value;
+  const toVal   = document.getElementById('yr-to').value;
+  rangeFrom = fromVal ? new Date(parseInt(fromVal), 0, 1).getTime() : null;
+  rangeTo   = toVal   ? new Date(parseInt(toVal),   11, 31, 23, 59, 59).getTime() : null;
+  updateRangeLabel();
+  draw();
+  updateZbar();
+}
+function clearRange() {
+  rangeFrom = null; rangeTo = null;
+  document.getElementById('yr-from').value = '';
+  document.getElementById('yr-to').value = '';
+  updateRangeLabel();
+  draw();
+  updateZbar();
+}
+function updateRangeLabel() {
+  const el = document.getElementById('range-active');
+  const from = document.getElementById('yr-from').value;
+  const to   = document.getElementById('yr-to').value;
+  if(from || to) {
+    el.textContent = 'filtering ' + (from||'birth') + ' → ' + (to||'now');
+  } else {
+    el.textContent = '';
+  }
+}
+function inRange(ev) {
+  if(rangeFrom && ev.date < rangeFrom) return false;
+  if(rangeTo   && ev.date > rangeTo)   return false;
+  return true;
+}
+
 // ── Search ─────────────────────────────────────────────────────────────────
 function onSearch(val) {
   searchQ = val.trim().toLowerCase();
@@ -1042,7 +1110,7 @@ function matchesSearch(ev) {
 function updateSearchCount() {
   const el = document.getElementById('search-count');
   if(!searchQ){ el.textContent=''; return; }
-  const n = events.filter(matchesSearch).length;
+  const n = events.filter(ev => matchesSearch(ev) && inRange(ev)).length;
   el.textContent = n + ' result' + (n!==1?'s':'');
   el.style.color = n===0 ? '#a85050' : '#6a6560';
 }
@@ -1053,6 +1121,8 @@ loadEvents();
 resize();
 updateZbar();
 buildLegend();
+document.getElementById('yr-from').addEventListener('change', onRangeChange);
+document.getElementById('yr-to').addEventListener('change', onRangeChange);
 </script>
 <div id="tip"></div>
 </body>
